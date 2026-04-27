@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deposit Calculator</title>
+  <style>
+    :root {
+      --text: #111827;
+      --muted: #6b7280;
+      --border: #d1d5db;
+      --primary: #111827;
+      --bg: #ffffff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    .container {
+      max-width: 760px;
+      margin: 48px auto;
+      padding: 0 20px 40px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 32px;
+      line-height: 1.2;
+    }
+
+    .subtitle {
+      margin: 0 0 28px;
+      color: var(--muted);
+      font-size: 15px;
+    }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      background: #fff;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 700;
+    }
+
+    input[type="number"] {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: 16px;
+      margin-bottom: 14px;
+    }
+
+    input[type="number"]:focus {
+      outline: 2px solid #bfdbfe;
+      outline-offset: 1px;
+      border-color: #93c5fd;
+    }
+
+    input[type="number"].invalid {
+      border-color: #dc2626;
+      background: #fef2f2;
+    }
+
+    .option-title {
+      margin: 2px 0 10px;
+      font-weight: 700;
+    }
+
+    .options {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .option-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text);
+      font-size: 14px;
+    }
+
+    button {
+      border: none;
+      border-radius: 10px;
+      background: var(--primary);
+      color: #fff;
+      padding: 12px 18px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      opacity: 0.92;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .error {
+      margin-top: 12px;
+      color: #b91c1c;
+      font-size: 14px;
+      min-height: 20px;
+    }
+
+    .hint {
+      margin: 0 0 14px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .result {
+      margin-top: 22px;
+      border-top: 1px solid var(--border);
+      padding-top: 18px;
+      display: none;
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 9px 0;
+      border-bottom: 1px dashed #e5e7eb;
+      font-size: 15px;
+    }
+
+    .row strong {
+      font-size: 17px;
+    }
+
+    .total {
+      margin-top: 8px;
+      border-bottom: none;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <main class="container">
+    <h1>Deposit Calculator</h1>
+    <p class="subtitle">房产经纪快速计算押金与相关费用</p>
+
+    <section class="card">
+      <label for="rentInput">Monthly Rental (RM)</label>
+      <input id="rentInput" type="number" min="0" step="0.01" placeholder="例如 1500" />
+      <p class="hint">输入每月租金后，选择是否包含 SST，再点击 Calculate。</p>
+
+      <p class="option-title">Agent Fee Option</p>
+      <div class="options">
+        <label class="option-row">
+          <input type="radio" name="sstOption" value="include" checked />
+          Include SST 8%
+        </label>
+        <label class="option-row">
+          <input type="radio" name="sstOption" value="exclude" />
+          Not Include SST
+        </label>
+      </div>
+
+      <button id="calculateBtn" type="button">Calculate</button>
+      <p id="errorMsg" class="error"></p>
+
+      <div id="resultPanel" class="result">
+        <div class="row"><span>First month advance rental</span><span id="firstMonth"></span></div>
+        <div class="row"><span>Two months rental deposit</span><span id="twoMonths"></span></div>
+        <div class="row"><span>Half month utilities deposit</span><span id="utilities"></span></div>
+        <div class="row"><span>Half month agent fee</span><span id="agentFee"></span></div>
+        <div class="row"><span>Agreement + stamping</span><span id="agreement"></span></div>
+        <div class="row total"><strong>TOTAL AMOUNT</strong><strong id="total"></strong></div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const rentInput = document.getElementById("rentInput");
+    const errorMsg = document.getElementById("errorMsg");
+    const resultPanel = document.getElementById("resultPanel");
+    const calculateBtn = document.getElementById("calculateBtn");
+
+    function formatRM(value) {
+      return new Intl.NumberFormat("en-MY", {
+        style: "currency",
+        currency: "MYR",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      }).format(value);
+    }
+
+    function getSstOption() {
+      const selected = document.querySelector('input[name="sstOption"]:checked');
+      return selected ? selected.value : "include";
+    }
+
+    function calculateAgreementStamping(monthlyRent) {
+      const step1 = monthlyRent * 12;
+      const step2 = step1 / 250;
+      const step3 = step2 + 200;
+      return step3;
+    }
+
+    function validateRentInput() {
+      const monthlyRent = Number(rentInput.value);
+      const isValid = Number.isFinite(monthlyRent) && monthlyRent > 0;
+
+      if (!isValid) {
+        errorMsg.textContent = "请输入正确的租金金额（大于 0）。";
+        rentInput.classList.add("invalid");
+        calculateBtn.disabled = true;
+        resultPanel.style.display = "none";
+        return null;
+      }
+
+      errorMsg.textContent = "";
+      rentInput.classList.remove("invalid");
+      calculateBtn.disabled = false;
+      return monthlyRent;
+    }
+
+    function calculate() {
+      const monthlyRent = validateRentInput();
+      if (monthlyRent === null) {
+        return;
+      }
+
+      calculateBtn.disabled = true;
+      const includeSst = getSstOption() === "include";
+
+      const firstMonthAdvance = monthlyRent;
+      const twoMonthsDeposit = monthlyRent * 2;
+      const halfMonthUtilities = monthlyRent / 2;
+
+      let halfMonthAgentFee = monthlyRent / 2;
+      if (includeSst) {
+        halfMonthAgentFee = halfMonthAgentFee * 1.08;
+      }
+
+      const agreementStamping = calculateAgreementStamping(monthlyRent);
+
+      const totalAmount =
+        firstMonthAdvance +
+        twoMonthsDeposit +
+        halfMonthUtilities +
+        halfMonthAgentFee +
+        agreementStamping;
+
+      document.getElementById("firstMonth").textContent = formatRM(firstMonthAdvance);
+      document.getElementById("twoMonths").textContent = formatRM(twoMonthsDeposit);
+      document.getElementById("utilities").textContent = formatRM(halfMonthUtilities);
+      document.getElementById("agentFee").textContent = formatRM(halfMonthAgentFee);
+      document.getElementById("agreement").textContent = formatRM(agreementStamping);
+      document.getElementById("total").textContent = formatRM(totalAmount);
+
+      resultPanel.style.display = "block";
+      calculateBtn.disabled = false;
+    }
+
+    calculateBtn.addEventListener("click", calculate);
+    rentInput.addEventListener("input", validateRentInput);
+    rentInput.addEventListener("keydown", function (event) {
+      if (event.key === "Enter" && !calculateBtn.disabled) {
+        calculate();
+      }
+    });
+
+    validateRentInput();
+  </script>
+</body>
+</html>
