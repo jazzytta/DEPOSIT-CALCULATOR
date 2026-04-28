@@ -244,6 +244,10 @@
           <input type="radio" name="sstOption" value="exclude" />
           Not Include SST
         </label>
+        <label class="option-row">
+          <input id="highlightTitleOption" type="checkbox" />
+          Highlight Title
+        </label>
       </div>
 
       <button id="calculateBtn" type="button">Calculate</button>
@@ -273,6 +277,7 @@
     const calculateBtn = document.getElementById("calculateBtn");
     const copyBtn = document.getElementById("copyBtn");
     const whatsappBtn = document.getElementById("whatsappBtn");
+    const highlightTitleOption = document.getElementById("highlightTitleOption");
     const toast = document.getElementById("toast");
     let toastTimer = null;
 
@@ -357,16 +362,31 @@
       calculateBtn.disabled = false;
     }
 
+    function formatTitleLine(title, shouldHighlight) {
+      return shouldHighlight ? `*${title}*` : title;
+    }
+
     function buildResultText() {
-      return [
-        "Deposit Calculation Result",
-        `First month advance rental: ${document.getElementById("firstMonth").textContent}`,
-        `Two months rental deposit: ${document.getElementById("twoMonths").textContent}`,
-        `Half month utilities deposit: ${document.getElementById("utilities").textContent}`,
-        `Half month agent fee: ${document.getElementById("agentFee").textContent}`,
-        `Agreement + stamping: ${document.getElementById("agreement").textContent}`,
-        `TOTAL AMOUNT: ${document.getElementById("total").textContent}`
-      ].join("\n");
+      const shouldHighlight = highlightTitleOption.checked;
+      const rows = [
+        ["First month advance rental", document.getElementById("firstMonth").textContent],
+        ["Two months rental deposit", document.getElementById("twoMonths").textContent],
+        ["Half month utilities deposit", document.getElementById("utilities").textContent],
+        ["Half month agent fee", document.getElementById("agentFee").textContent],
+        ["Agreement + stamping", document.getElementById("agreement").textContent]
+      ];
+
+      const lines = [];
+      for (const [title, amount] of rows) {
+        lines.push(formatTitleLine(title, shouldHighlight));
+        lines.push(amount);
+      }
+
+      const totalTitle = shouldHighlight ? "*TOTAL AMOUNT*:" : "TOTAL AMOUNT:";
+      lines.push(totalTitle);
+      lines.push(document.getElementById("total").textContent);
+      lines.push("-");
+      return lines.join("\n");
     }
 
     function showToast(message, type = "info") {
@@ -421,7 +441,7 @@
         showToast("Please calculate first.", "error");
         return;
       }
-      const text = `Here's the deposit for the unit,you take a look\n\n${buildResultText()}`;
+      const text = buildResultText();
       const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
       const newWindow = window.open(url, "_blank");
       if (newWindow) {
