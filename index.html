@@ -64,6 +64,12 @@
       margin-bottom: 14px;
     }
 
+    .inline-note {
+      margin: -8px 0 12px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
     input[type="number"]:focus {
       outline: 2px solid #bfdbfe;
       outline-offset: 1px;
@@ -152,6 +158,67 @@
       border-bottom: none;
       font-weight: 700;
     }
+
+    .result-actions {
+      margin-top: 14px;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .result-actions button {
+      background: #1f2937;
+      font-size: 14px;
+      padding: 10px 14px;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 14px;
+      background: #111827;
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      width: max-content;
+      max-width: calc(100vw - 24px);
+      text-align: center;
+      box-shadow: 0 8px 24px rgba(17, 24, 39, 0.2);
+      opacity: 0;
+      transform: translate(-50%, 12px);
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+
+    .toast.success {
+      background: #065f46;
+    }
+
+    .toast.error {
+      background: #991b1b;
+    }
+
+    @media (min-width: 768px) {
+      .toast {
+        left: auto;
+        right: 20px;
+        bottom: 20px;
+        max-width: 360px;
+        transform: translateY(10px);
+      }
+
+      .toast.show {
+        transform: translateY(0);
+      }
+    }
   </style>
 </head>
 <body>
@@ -162,6 +229,9 @@
     <section class="card">
       <label for="rentInput">Monthly Rental (RM)</label>
       <input id="rentInput" type="number" min="0" step="0.01" placeholder="例如 1500" />
+      <label for="agreementFeeInput">Agreement Fee (RM)</label>
+      <input id="agreementFeeInput" type="number" min="0" step="0.01" value="0" placeholder="例如 200" />
+      <p class="inline-note">Please enter your additional agreement amount (excluding stamping cost).</p>
       <p class="hint">输入每月租金后，选择是否包含 SST，再点击 Calculate。</p>
 
       <p class="option-title">Agent Fee Option</p>
@@ -186,15 +256,25 @@
         <div class="row"><span>Half month agent fee</span><span id="agentFee"></span></div>
         <div class="row"><span>Agreement + stamping</span><span id="agreement"></span></div>
         <div class="row total"><strong>TOTAL AMOUNT</strong><strong id="total"></strong></div>
+        <div class="result-actions">
+          <button id="copyBtn" type="button">Copy Result</button>
+          <button id="whatsappBtn" type="button">Send via WhatsApp</button>
+        </div>
       </div>
     </section>
   </main>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script>
     const rentInput = document.getElementById("rentInput");
+    const agreementFeeInput = document.getElementById("agreementFeeInput");
     const errorMsg = document.getElementById("errorMsg");
     const resultPanel = document.getElementById("resultPanel");
     const calculateBtn = document.getElementById("calculateBtn");
+    const copyBtn = document.getElementById("copyBtn");
+    const whatsappBtn = document.getElementById("whatsappBtn");
+    const toast = document.getElementById("toast");
+    let toastTimer = null;
 
     function formatRM(value) {
       return new Intl.NumberFormat("en-MY", {
@@ -213,17 +293,19 @@
     function calculateAgreementStamping(monthlyRent) {
       const step1 = monthlyRent * 12;
       const step2 = step1 / 250;
-      const step3 = step2 + 200;
-      return step3;
+      return step2;
     }
 
-    function validateRentInput() {
+    function validateInputs() {
       const monthlyRent = Number(rentInput.value);
+      const agreementFee = Number(agreementFeeInput.value);
       const isValid = Number.isFinite(monthlyRent) && monthlyRent > 0;
+      const isAgreementFeeValid = Number.isFinite(agreementFee) && agreementFee >= 0;
 
-      if (!isValid) {
-        errorMsg.textContent = "请输入正确的租金金额（大于 0）。";
+      if (!isValid || !isAgreementFeeValid) {
+        errorMsg.textContent = "请输入正确的金额（租金大于 0，Agreement Fee 不可小于 0）。";
         rentInput.classList.add("invalid");
+        agreementFeeInput.classList.add("invalid");
         calculateBtn.disabled = true;
         resultPanel.style.display = "none";
         return null;
@@ -231,15 +313,17 @@
 
       errorMsg.textContent = "";
       rentInput.classList.remove("invalid");
+      agreementFeeInput.classList.remove("invalid");
       calculateBtn.disabled = false;
-      return monthlyRent;
+      return { monthlyRent, agreementFee };
     }
 
     function calculate() {
-      const monthlyRent = validateRentInput();
-      if (monthlyRent === null) {
+      const values = validateInputs();
+      if (values === null) {
         return;
       }
+      const { monthlyRent, agreementFee } = values;
 
       calculateBtn.disabled = true;
       const includeSst = getSstOption() === "include";
@@ -253,7 +337,7 @@
         halfMonthAgentFee = halfMonthAgentFee * 1.08;
       }
 
-      const agreementStamping = calculateAgreementStamping(monthlyRent);
+      const agreementStamping = calculateAgreementStamping(monthlyRent) + agreementFee;
 
       const totalAmount =
         firstMonthAdvance +
@@ -273,15 +357,92 @@
       calculateBtn.disabled = false;
     }
 
+    function buildResultText() {
+      return [
+        "Deposit Calculation Result",
+        `First month advance rental: ${document.getElementById("firstMonth").textContent}`,
+        `Two months rental deposit: ${document.getElementById("twoMonths").textContent}`,
+        `Half month utilities deposit: ${document.getElementById("utilities").textContent}`,
+        `Half month agent fee: ${document.getElementById("agentFee").textContent}`,
+        `Agreement + stamping: ${document.getElementById("agreement").textContent}`,
+        `TOTAL AMOUNT: ${document.getElementById("total").textContent}`
+      ].join("\n");
+    }
+
+    function showToast(message, type = "info") {
+      toast.textContent = message;
+      toast.className = `toast ${type} show`;
+      if (toastTimer) {
+        clearTimeout(toastTimer);
+      }
+      toastTimer = setTimeout(() => {
+        toast.classList.remove("show");
+      }, 2200);
+    }
+
+    function fallbackCopyText(text) {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.setAttribute("readonly", "");
+      textArea.style.position = "fixed";
+      textArea.style.opacity = "0";
+      textArea.style.pointerEvents = "none";
+      document.body.appendChild(textArea);
+      textArea.select();
+      const copied = document.execCommand("copy");
+      document.body.removeChild(textArea);
+      return copied;
+    }
+
+    async function copyResult() {
+      if (resultPanel.style.display === "none") {
+        showToast("Please calculate first.", "error");
+        return;
+      }
+      const text = buildResultText();
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+          showToast("Calculation result copied.", "success");
+          return;
+        }
+        if (fallbackCopyText(text)) {
+          showToast("Calculation result copied.", "success");
+          return;
+        }
+        showToast("Copy failed. Please copy manually.", "error");
+      } catch (error) {
+        showToast("Copy failed. Please copy manually.", "error");
+      }
+    }
+
+    function sendWhatsApp() {
+      if (resultPanel.style.display === "none") {
+        showToast("Please calculate first.", "error");
+        return;
+      }
+      const text = `Here's the deposit for the unit,you take a look\n\n${buildResultText()}`;
+      const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
+      const newWindow = window.open(url, "_blank");
+      if (newWindow) {
+        showToast("Opening WhatsApp...", "success");
+      } else {
+        showToast("Popup blocked. Please allow popups.", "error");
+      }
+    }
+
     calculateBtn.addEventListener("click", calculate);
-    rentInput.addEventListener("input", validateRentInput);
+    copyBtn.addEventListener("click", copyResult);
+    whatsappBtn.addEventListener("click", sendWhatsApp);
+    rentInput.addEventListener("input", validateInputs);
+    agreementFeeInput.addEventListener("input", validateInputs);
     rentInput.addEventListener("keydown", function (event) {
       if (event.key === "Enter" && !calculateBtn.disabled) {
         calculate();
       }
     });
 
-    validateRentInput();
+    validateInputs();
   </script>
 </body>
 </html>
