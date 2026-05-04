@@ -101,6 +101,12 @@
       font-size: 14px;
     }
 
+    .toggle-btn {
+      background: #374151;
+      font-size: 14px;
+      padding: 10px 14px;
+    }
+
     button {
       border: none;
       border-radius: 10px;
@@ -229,37 +235,32 @@
     <section class="card">
       <label for="rentInput">Monthly Rental (RM)</label>
       <input id="rentInput" type="number" min="0" step="0.01" placeholder="例如 1500" />
+      <label for="rentalDepositMonthsInput">Month Rental Deposit</label>
+      <input id="rentalDepositMonthsInput" type="number" min="0" step="0.01" value="2" placeholder="例如 2" />
+      <label for="advanceRentalMonthsInput">Month advance rental</label>
+      <input id="advanceRentalMonthsInput" type="number" min="0" step="0.01" value="1" placeholder="例如 1" />
+      <label for="utilitiesDepositMonthsInput">Month Utilities Deposit</label>
+      <input id="utilitiesDepositMonthsInput" type="number" min="0" step="0.01" value="0.5" placeholder="例如 0.5" />
       <label for="agreementFeeInput">Agreement Fee (RM)</label>
       <input id="agreementFeeInput" type="number" min="0" step="0.01" value="0" placeholder="例如 200" />
       <p class="inline-note">Please enter your additional agreement amount (excluding stamping cost).</p>
-      <p class="hint">输入每月租金后，选择是否包含 SST，再点击 Calculate。</p>
+      <p class="hint">Enter monthly rental and month values, then click Calculate.</p>
 
-      <p class="option-title">Agent Fee Option</p>
+      <p class="option-title">Detail Language</p>
       <div class="options">
-        <label class="option-row">
-          <input type="radio" name="sstOption" value="include" checked />
-          Include SST 8%
-        </label>
-        <label class="option-row">
-          <input type="radio" name="sstOption" value="exclude" />
-          Not Include SST
-        </label>
-        <label class="option-row">
-          <input id="highlightTitleOption" type="checkbox" />
-          Highlight Title
-        </label>
+        <button id="languageToggleBtn" class="toggle-btn" type="button">Switch to 中文明细</button>
       </div>
 
       <button id="calculateBtn" type="button">Calculate</button>
       <p id="errorMsg" class="error"></p>
 
       <div id="resultPanel" class="result">
-        <div class="row"><span>First month advance rental</span><span id="firstMonth"></span></div>
-        <div class="row"><span>Two months rental deposit</span><span id="twoMonths"></span></div>
-        <div class="row"><span>Half month utilities deposit</span><span id="utilities"></span></div>
-        <div class="row"><span>Half month agent fee</span><span id="agentFee"></span></div>
-        <div class="row"><span>Agreement + stamping</span><span id="agreement"></span></div>
-        <div class="row total"><strong>TOTAL AMOUNT</strong><strong id="total"></strong></div>
+        <div class="row"><span id="rentalDepositLabel"></span><span id="rentalDeposit"></span></div>
+        <div class="row"><span id="utilitiesLabel"></span><span id="utilities"></span></div>
+        <div class="row"><span id="advanceRentalLabel"></span><span id="advanceRental"></span></div>
+        <div class="row"><span id="agreementLabel"></span><span id="agreement"></span></div>
+        <div class="row total"><strong id="totalLabel"></strong><strong id="total"></strong></div>
+        <div class="row total"><strong id="refundableLabel"></strong><strong id="refundable"></strong></div>
         <div class="result-actions">
           <button id="copyBtn" type="button">Copy Result</button>
           <button id="whatsappBtn" type="button">Send via WhatsApp</button>
@@ -271,15 +272,19 @@
 
   <script>
     const rentInput = document.getElementById("rentInput");
+    const rentalDepositMonthsInput = document.getElementById("rentalDepositMonthsInput");
+    const advanceRentalMonthsInput = document.getElementById("advanceRentalMonthsInput");
+    const utilitiesDepositMonthsInput = document.getElementById("utilitiesDepositMonthsInput");
     const agreementFeeInput = document.getElementById("agreementFeeInput");
     const errorMsg = document.getElementById("errorMsg");
     const resultPanel = document.getElementById("resultPanel");
     const calculateBtn = document.getElementById("calculateBtn");
     const copyBtn = document.getElementById("copyBtn");
     const whatsappBtn = document.getElementById("whatsappBtn");
-    const highlightTitleOption = document.getElementById("highlightTitleOption");
+    const languageToggleBtn = document.getElementById("languageToggleBtn");
     const toast = document.getElementById("toast");
     let toastTimer = null;
+    let useChineseDetails = false;
 
     function formatRM(value) {
       return new Intl.NumberFormat("en-MY", {
@@ -290,26 +295,67 @@
       }).format(value);
     }
 
-    function getSstOption() {
-      const selected = document.querySelector('input[name="sstOption"]:checked');
-      return selected ? selected.value : "include";
-    }
-
     function calculateAgreementStamping(monthlyRent) {
       const step1 = monthlyRent * 12;
       const step2 = step1 / 250;
       return step2;
     }
 
+    function formatMonthValue(value) {
+      if (Number.isInteger(value)) {
+        return String(value);
+      }
+      return String(Number(value.toFixed(2))).replace(/\.0+$/, "");
+    }
+
+    function buildLabels(rentalMonths, utilitiesMonths, advanceMonths) {
+      const rentalValue = formatMonthValue(rentalMonths);
+      const utilitiesValue = formatMonthValue(utilitiesMonths);
+      const advanceValue = formatMonthValue(advanceMonths);
+      if (useChineseDetails) {
+        return {
+          rentalDeposit: `${rentalValue}个月租金押金`,
+          utilities: `${utilitiesValue}个月水电押金`,
+          advance: `${advanceValue}个月预付租金`,
+          agreement: "租赁协议 + 印花税",
+          total: "总计",
+          refundable: "租约期满后可退还押金"
+        };
+      }
+      return {
+        rentalDeposit: `${rentalValue} Month Rental Deposit`,
+        utilities: `${utilitiesValue} Month Utilities Deposit`,
+        advance: `${advanceValue} Month Advance Rental`,
+        agreement: "Agreement + Stamping",
+        total: "Total",
+        refundable: "Refundable deposit upon tenancy expiry"
+      };
+    }
+
     function validateInputs() {
       const monthlyRent = Number(rentInput.value);
+      const rentalDepositMonths = Number(rentalDepositMonthsInput.value);
+      const advanceRentalMonths = Number(advanceRentalMonthsInput.value);
+      const utilitiesDepositMonths = Number(utilitiesDepositMonthsInput.value);
       const agreementFee = Number(agreementFeeInput.value);
       const isValid = Number.isFinite(monthlyRent) && monthlyRent > 0;
+      const isRentalDepositMonthsValid = Number.isFinite(rentalDepositMonths) && rentalDepositMonths >= 0;
+      const isAdvanceRentalMonthsValid = Number.isFinite(advanceRentalMonths) && advanceRentalMonths >= 0;
+      const isUtilitiesDepositMonthsValid = Number.isFinite(utilitiesDepositMonths) && utilitiesDepositMonths >= 0;
       const isAgreementFeeValid = Number.isFinite(agreementFee) && agreementFee >= 0;
 
-      if (!isValid || !isAgreementFeeValid) {
-        errorMsg.textContent = "请输入正确的金额（租金大于 0，Agreement Fee 不可小于 0）。";
+      if (
+        !isValid ||
+        !isRentalDepositMonthsValid ||
+        !isAdvanceRentalMonthsValid ||
+        !isUtilitiesDepositMonthsValid ||
+        !isAgreementFeeValid
+      ) {
+        errorMsg.textContent = "Please enter valid values (rent > 0, month fields >= 0, agreement fee >= 0).";
         rentInput.classList.add("invalid");
+        rentalDepositMonthsInput.classList.add("invalid");
+        advanceRentalMonthsInput.classList.add("invalid");
+        utilitiesDepositMonthsInput.classList.add("invalid");
         agreementFeeInput.classList.add("invalid");
         calculateBtn.disabled = true;
         resultPanel.style.display = "none";
@@ -318,9 +364,12 @@
 
       errorMsg.textContent = "";
       rentInput.classList.remove("invalid");
+      rentalDepositMonthsInput.classList.remove("invalid");
+      advanceRentalMonthsInput.classList.remove("invalid");
+      utilitiesDepositMonthsInput.classList.remove("invalid");
       agreementFeeInput.classList.remove("invalid");
       calculateBtn.disabled = false;
-      return { monthlyRent, agreementFee };
+      return { monthlyRent, rentalDepositMonths, advanceRentalMonths, utilitiesDepositMonths, agreementFee };
     }
 
     function calculate() {
@@ -328,64 +377,74 @@
       if (values === null) {
         return;
       }
-      const { monthlyRent, agreementFee } = values;
+      const { monthlyRent, rentalDepositMonths, advanceRentalMonths, utilitiesDepositMonths, agreementFee } = values;
 
       calculateBtn.disabled = true;
-      const includeSst = getSstOption() === "include";
-
-      const firstMonthAdvance = monthlyRent;
-      const twoMonthsDeposit = monthlyRent * 2;
-      const halfMonthUtilities = monthlyRent / 2;
-
-      let halfMonthAgentFee = monthlyRent / 2;
-      if (includeSst) {
-        halfMonthAgentFee = halfMonthAgentFee * 1.08;
-      }
+      const advanceRental = monthlyRent * advanceRentalMonths;
+      const rentalDeposit = monthlyRent * rentalDepositMonths;
+      const utilitiesDeposit = monthlyRent * utilitiesDepositMonths;
 
       const agreementStamping = calculateAgreementStamping(monthlyRent) + agreementFee;
+      const totalAmount = advanceRental + rentalDeposit + utilitiesDeposit + agreementStamping;
+      const refundableDeposit = rentalDeposit + utilitiesDeposit;
+      const labels = buildLabels(rentalDepositMonths, utilitiesDepositMonths, advanceRentalMonths);
 
-      const totalAmount =
-        firstMonthAdvance +
-        twoMonthsDeposit +
-        halfMonthUtilities +
-        halfMonthAgentFee +
-        agreementStamping;
-
-      document.getElementById("firstMonth").textContent = formatRM(firstMonthAdvance);
-      document.getElementById("twoMonths").textContent = formatRM(twoMonthsDeposit);
-      document.getElementById("utilities").textContent = formatRM(halfMonthUtilities);
-      document.getElementById("agentFee").textContent = formatRM(halfMonthAgentFee);
+      document.getElementById("rentalDepositLabel").textContent = labels.rentalDeposit;
+      document.getElementById("utilitiesLabel").textContent = labels.utilities;
+      document.getElementById("advanceRentalLabel").textContent = labels.advance;
+      document.getElementById("agreementLabel").textContent = labels.agreement;
+      document.getElementById("totalLabel").textContent = labels.total;
+      document.getElementById("refundableLabel").textContent = labels.refundable;
+      document.getElementById("rentalDeposit").textContent = formatRM(rentalDeposit);
+      document.getElementById("utilities").textContent = formatRM(utilitiesDeposit);
+      document.getElementById("advanceRental").textContent = formatRM(advanceRental);
       document.getElementById("agreement").textContent = formatRM(agreementStamping);
       document.getElementById("total").textContent = formatRM(totalAmount);
+      document.getElementById("refundable").textContent = formatRM(refundableDeposit);
 
       resultPanel.style.display = "block";
       calculateBtn.disabled = false;
     }
 
-    function formatTitleLine(title, shouldHighlight) {
-      return shouldHighlight ? `*${title}*` : title;
+    function buildResultText() {
+      const rows = [
+        [document.getElementById("rentalDepositLabel").textContent, document.getElementById("rentalDeposit").textContent],
+        [document.getElementById("utilitiesLabel").textContent, document.getElementById("utilities").textContent],
+        [document.getElementById("advanceRentalLabel").textContent, document.getElementById("advanceRental").textContent],
+        [document.getElementById("agreementLabel").textContent, document.getElementById("agreement").textContent],
+        [document.getElementById("totalLabel").textContent, document.getElementById("total").textContent],
+        [document.getElementById("refundableLabel").textContent, document.getElementById("refundable").textContent]
+      ];
+      const lines = [
+        `*${rows[0][0]}:*`,
+        rows[0][1],
+        "",
+        `*${rows[1][0]}:*`,
+        rows[1][1],
+        "___________",
+        "",
+        `*${rows[2][0]}:*`,
+        rows[2][1],
+        "",
+        `*${rows[3][0]}:*`,
+        rows[3][1],
+        "___________",
+        "",
+        `*${rows[4][0]}:*`,
+        rows[4][1],
+        "",
+        `*${rows[5][0]}:*`,
+        rows[5][1]
+      ];
+      return lines.join("\n");
     }
 
-    function buildResultText() {
-      const shouldHighlight = highlightTitleOption.checked;
-      const rows = [
-        ["First month advance rental", document.getElementById("firstMonth").textContent],
-        ["Two months rental deposit", document.getElementById("twoMonths").textContent],
-        ["Half month utilities deposit", document.getElementById("utilities").textContent],
-        ["Half month agent fee", document.getElementById("agentFee").textContent],
-        ["Agreement + stamping", document.getElementById("agreement").textContent]
-      ];
-
-      const lines = [];
-      for (const [title, amount] of rows) {
-        lines.push(formatTitleLine(title, shouldHighlight));
-        lines.push(amount);
+    function toggleDetailLanguage() {
+      useChineseDetails = !useChineseDetails;
+      languageToggleBtn.textContent = useChineseDetails ? "Switch to English Details" : "Switch to 中文明细";
+      if (resultPanel.style.display !== "none") {
+        calculate();
       }
-
-      const totalTitle = shouldHighlight ? "*TOTAL AMOUNT*:" : "TOTAL AMOUNT:";
-      lines.push(totalTitle);
-      lines.push(document.getElementById("total").textContent);
-      return lines.join("\n");
     }
 
     function showToast(message, type = "info") {
@@ -453,7 +512,11 @@
     calculateBtn.addEventListener("click", calculate);
     copyBtn.addEventListener("click", copyResult);
     whatsappBtn.addEventListener("click", sendWhatsApp);
+    languageToggleBtn.addEventListener("click", toggleDetailLanguage);
     rentInput.addEventListener("input", validateInputs);
+    rentalDepositMonthsInput.addEventListener("input", validateInputs);
+    advanceRentalMonthsInput.addEventListener("input", validateInputs);
+    utilitiesDepositMonthsInput.addEventListener("input", validateInputs);
     agreementFeeInput.addEventListener("input", validateInputs);
     rentInput.addEventListener("keydown", function (event) {
       if (event.key === "Enter" && !calculateBtn.disabled) {
